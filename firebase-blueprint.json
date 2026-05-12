@@ -1,74 +1,95 @@
 {
   "entities": {
-    "Order": {
-      "title": "Order",
-      "description": "A customer order for X LUXE products.",
+    "User": {
+      "title": "User Profile",
+      "description": "User profile data including roles.",
       "type": "object",
       "properties": {
-        "customerName": { "type": "string", "description": "Full name of the customer" },
-        "email": { "type": "string", "format": "email", "description": "Contact email" },
-        "phone": { "type": "string", "description": "Contact phone number (WhatsApp)" },
-        "shippingAddress": { "type": "string", "description": "Full delivery address" },
-        "productName": { "type": "string", "description": "The specific edition ordered (Standard/Grandeur/Private)" },
-        "orderStatus": { "type": "string", "enum": ["pending", "confirmed", "shipped", "delivered"], "description": "Current status of the order" },
-        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of creation" },
-        "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp of last update" }
-      },
-      "required": ["customerName", "phone", "shippingAddress", "productName", "orderStatus", "createdAt"]
-    },
-    "AdminProfile": {
-      "title": "Admin Profile",
-      "description": "User profile with administrative privileges.",
-      "type": "object",
-      "properties": {
-        "email": { "type": "string", "format": "email" },
-        "isAdmin": { "type": "boolean" }
-      },
-      "required": ["email", "isAdmin"]
-    },
-    "Review": {
-      "title": "Review",
-      "description": "A product review left by a customer.",
-      "type": "object",
-      "properties": {
-        "productName": { "type": "string", "description": "The product being reviewed" },
-        "userName": { "type": "string", "description": "Name of the reviewer" },
-        "rating": { "type": "number", "minimum": 1, "maximum": 5, "description": "Star rating out of 5" },
-        "comment": { "type": "string", "description": "Detailed review text" },
-        "createdAt": { "type": "string", "format": "date-time", "description": "When the review was posted" },
-        "isApproved": { "type": "boolean", "description": "Whether the review has been moderated" }
-      },
-      "required": ["productName", "userName", "rating", "comment", "createdAt"]
-    },
-    "VisitorEvent": {
-      "title": "Visitor Event",
-      "description": "A tracked interaction from a site visitor.",
-      "type": "object",
-      "properties": {
-        "eventType": { "type": "string", "enum": ["view", "click"], "description": "Type of interaction" },
-        "page": { "type": "string", "description": "Page or section targeted" },
-        "product": { "type": "string", "description": "Product involved if any" },
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "fullName": { "type": "string" },
+        "classLevel": { "type": "string", "enum": ["9th", "10th", "11th", "12th"] },
+        "role": { "type": "string", "enum": ["admin", "student"] },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["eventType", "createdAt"]
+      "required": ["uid", "email", "role"]
+    },
+    "Lecture": {
+      "title": "Daily Topic",
+      "description": "Daily content including board pictures or video links.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "boardImageUrl": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "teacher": { "type": "string" },
+        "classLevel": { "type": "string", "enum": ["9th", "10th", "11th", "12th"] },
+        "subject": { "type": "string", "enum": ["Biology", "Physics", "Chemistry", "Maths", "Other"] }
+      },
+      "required": ["title", "date", "classLevel", "subject"]
+    },
+    "Result": {
+      "title": "Exam Result",
+      "description": "Student exam results.",
+      "type": "object",
+      "properties": {
+        "studentName": { "type": "string" },
+        "studentEmail": { "type": "string" },
+        "subject": { "type": "string", "enum": ["Biology", "Physics", "Chemistry", "Maths", "Other"] },
+        "marks": { "type": "number" },
+        "totalMarks": { "type": "number" },
+        "classLevel": { "type": "string", "enum": ["9th", "10th", "11th", "12th"] },
+        "date": { "type": "string", "format": "date-time" }
+      },
+      "required": ["studentName", "studentEmail", "subject", "marks", "totalMarks", "classLevel", "date"]
+    },
+    "Note": {
+      "title": "Educational Note",
+      "description": "Notes and study materials in PDF format.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "pdfUrl": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "pdfUrl", "date"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "App-wide notifications for users.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "type": { "type": "string", "enum": ["news", "alert", "update"] }
+      },
+      "required": ["title", "message", "date"]
     }
   },
   "firestore": {
-    "orders/{orderId}": {
-      "schema": "Order",
-      "description": "Collection of all customer acquisitions."
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User documents keyed by UID."
     },
-    "admins/{uid}": {
-      "schema": "AdminProfile",
-      "description": "List of authorized administrators."
+    "lectures/{lectureId}": {
+      "schema": "Lecture",
+      "description": "Collection of daily lectures."
     },
-    "reviews/{reviewId}": {
-      "schema": "Review",
-      "description": "Public collection of product ratings and testimonials."
+    "results/{resultId}": {
+      "schema": "Result",
+      "description": "Collection of exam results."
     },
-    "visitors/{eventId}": {
-      "schema": "VisitorEvent",
-      "description": "Log of customer interactions for analytics."
+    "notes/{noteId}": {
+      "schema": "Note",
+      "description": "Collection of PDF notes."
+    },
+    "notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "Collection of notifications."
     }
   }
 }

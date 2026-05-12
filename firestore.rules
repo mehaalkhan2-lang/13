@@ -1,25 +1,29 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Default Deny
+    // 0. Default Deny
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Helper functions
+    // --- Helpers ---
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function isVerified() {
-      return isSignedIn() && request.auth.token.email_verified == true;
+    function isEmailVerified() {
+      return isSignedIn() && (request.auth.token.get('email_verified', false) == true || request.auth.token.get('email', '') == 'mehaalkhan.2@gmail.com');
     }
 
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.email == 'mehaalkhan.2@gmail.com' ||
-        (request.auth.token.email_verified == true && exists(/databases/$(database)/documents/admins/$(request.auth.uid)))
+        request.auth.token.get('email', '') == 'mehaalkhan.2@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
     }
 
     function isValidId(id) {
@@ -34,60 +38,96 @@ service cloud.firestore {
       return resource.data;
     }
 
-    // --- ORDERS COLLECTION ---
-    match /orders/{orderId} {
-      function isValidOrder(data) {
-        return data.customerName is string && data.customerName.size() <= 100 &&
-               data.phone is string && data.phone.size() <= 50 &&
-               data.shippingAddress is string && data.shippingAddress.size() <= 500 &&
-               data.productName is string && data.productName.size() <= 100 &&
-               data.orderStatus in ['pending', 'confirmed', 'shipped', 'delivered'] &&
-               data.createdAt == request.time;
-      }
+    // --- Validation Helpers ---
 
-      // Public can create orders (Acquisition flow)
-      allow create: if isValidId(orderId) && isValidOrder(incoming());
-      
-      // Only Admins can view and managed orders
-      allow get, list, update, delete: if isAdmin();
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'role', 'fullName', 'classLevel', 'createdAt']) &&
+             data.keys().size() <= 6 &&
+             data.uid is string && data.uid == request.auth.uid &&
+             data.email is string && data.email.size() <= 100 &&
+             data.fullName is string && data.fullName.size() <= 100 &&
+             data.classLevel in ['9th', '10th', '11th', '12th'] &&
+             data.role in ['admin', 'student'] &&
+             data.createdAt is timestamp &&
+             (data.role == 'admin' ? (request.auth.token.get('email', '') == 'mehaalkhan.2@gmail.com' || request.auth.token.email == 'mehaalkhan.2@gmail.com') : true);
     }
 
-    // --- ADMINS COLLECTION ---
-    match /admins/{uid} {
-      allow read: if isVerified() && request.auth.uid == uid;
-      allow write: if false; // Admins managed via console or first boot logic
+    function isValidLecture(data) {
+      return data.keys().hasAll(['title', 'date', 'classLevel', 'subject']) &&
+             data.title is string && data.title.size() <= 200 &&
+             (data.has('videoUrl') ? (data.videoUrl is string && data.videoUrl.size() <= 600) : true) &&
+             (data.has('boardImageUrl') ? (data.boardImageUrl is string && data.boardImageUrl.size() <= 2000) : true) &&
+             data.date is timestamp &&
+             data.classLevel in ['9th', '10th', '11th', '12th'] &&
+             data.subject in ['Biology', 'Physics', 'Chemistry', 'Maths', 'Other'];
     }
 
-    // --- REVIEWS COLLECTION ---
-    match /reviews/{reviewId} {
-      function isValidReview(data) {
-        return data.productName is string && data.productName.size() <= 100 &&
-               data.userName is string && data.userName.size() <= 100 &&
-               data.rating is number && data.rating >= 1 && data.rating <= 5 &&
-               data.comment is string && data.comment.size() <= 1000 &&
-               data.isApproved is bool &&
-               data.createdAt == request.time;
-      }
-
-      // Public can read approved reviews or Admins can see all
-      allow list: if (resource.data.isApproved == true) || isAdmin();
-      allow get: if true;
-
-      // Public can create reviews
-      allow create: if isValidId(reviewId) && isValidReview(incoming());
-
-      // Only Admins can manage all reviews
-      allow update, delete: if isAdmin();
+    function isValidResult(data) {
+      return data.keys().hasAll(['studentName', 'studentEmail', 'subject', 'marks', 'totalMarks', 'classLevel', 'date']) &&
+             data.studentName is string && data.studentName.size() <= 100 &&
+             data.studentEmail is string && data.studentEmail.size() <= 100 &&
+             data.subject is string && data.subject in ['Biology', 'Physics', 'Chemistry', 'Maths', 'Other'] &&
+             data.marks is number && data.totalMarks is number &&
+             data.classLevel in ['9th', '10th', '11th', '12th'] &&
+             data.date is timestamp;
     }
 
-    // --- VISITORS COLLECTION ---
-    match /visitors/{eventId} {
-      function isValidEvent(data) {
-        return data.eventType in ['view', 'click'] &&
-               data.createdAt == request.time;
-      }
-      allow create: if isValidId(eventId) && isValidEvent(incoming());
-      allow get, list, update, delete: if isAdmin();
+    function isValidNote(data) {
+      return data.keys().hasAll(['title', 'pdfUrl', 'date']) &&
+             data.title is string && data.title.size() <= 200 &&
+             data.pdfUrl is string && data.pdfUrl.size() <= 600 &&
+             data.date is timestamp;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['title', 'message', 'date']) &&
+             data.title is string && data.title.size() <= 200 &&
+             data.message is string && data.message.size() <= 1000 &&
+             data.date is timestamp;
+    }
+
+    // --- Collection Rules ---
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && isValidUser(incoming()) && 
+                    (incoming().role == existing().role || (isAdmin() && incoming().role == 'admin'));
+    }
+
+    match /lectures/{lectureId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidLecture(incoming());
+      allow update: if isAdmin() && isValidLecture(incoming());
+      allow delete: if isAdmin();
+    }
+
+    match /results/{resultId} {
+      allow get: if (isSignedIn() && (isAdmin() || existing().studentEmail == request.auth.token.email)) || true; // Allow lookup
+      allow list: if (isSignedIn() && (isAdmin() || (resource != null && resource.data.studentEmail == request.auth.token.email))) || true; // Public lookup
+      allow create: if isAdmin() && isValidResult(incoming());
+      allow update: if isAdmin() && isValidResult(incoming());
+      allow delete: if isAdmin();
+    }
+
+    match /notes/{noteId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidNote(incoming());
+      allow update: if isAdmin() && isValidNote(incoming());
+      allow delete: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidNotification(incoming());
+      allow update: if isAdmin() && isValidNotification(incoming());
+      allow delete: if isAdmin();
+    }
+    
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if false; 
     }
   }
 }
